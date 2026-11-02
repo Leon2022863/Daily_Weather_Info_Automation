@@ -3,42 +3,67 @@ import sys
 import requests
 from dotenv import load_dotenv
 
-# Load environment variables from .env
+# ==========================================
+# 1. CONFIGURATION & ENVIRONMENT SETUP
+# ==========================================
+# Load environment variables from a local .env file (if present)
 load_dotenv()
 
-# Direct NWS station ID for Winter Haven Regional Airport (Gilbert Field)
+# Define the NWS station ID (Winter Haven Regional Airport - Gilbert Field)
 STATION_ID = "KGIF"
+# Retrieve custom location name or fallback to default
 LOCATION_NAME = os.getenv("LOCATION_NAME", "Winter Haven, FL (KGIF Station)")
 
+# NWS API requires a custom User-Agent identifying the application and contact email
 HEADERS = {
     "User-Agent": "(weather-status-automator.local, platform-eng@example.com)",
     "Accept": "application/json"
 }
 
+
+# ==========================================
+# 2. DATA INGESTION (NWS API)
+# ==========================================
 def fetch_exact_station_weather() -> dict:
     """Pulls live metrics directly from the specific local airport observation station."""
+    # Construct the NWS endpoint URL for the latest observations from the station
     obs_url = f"https://api.weather.gov/stations/{STATION_ID}/observations/latest"
     
     try:
         print(f"[*] Querying direct observation feed for station: {STATION_ID}...")
+        # Send HTTP GET request with headers and a 10-second timeout
         response = requests.get(obs_url, headers=HEADERS, timeout=10)
+        # Raise an exception if the HTTP request returned an error status (e.g., 404, 500)
         response.raise_for_status()
+        # Return the parsed JSON response payload
         return response.json()
     except requests.exceptions.RequestException as e:
+        # Handle network failures, timeouts, or bad HTTP statuses
         print(f"[ERROR] Failed to communicate with NWS station feed: {e}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
+        # Catch any other unexpected exceptions
         print(f"[ERROR] {e}", file=sys.stderr)
         sys.exit(1)
 
+
+# ==========================================
+# 3. UNIT CONVERSION UTILITIES
+# ==========================================
 def c_to_f(celsius: float) -> float:
     """Converts Celsius to Fahrenheit."""
     return (celsius * 9/5) + 32
 
+
+# ==========================================
+# 4. TELEMETRY PARSING & FORMATTING
+# ==========================================
 def generate_status_text(obs_data: dict) -> str:
     """Parses live station observations into a clean telemetry summary."""
+    # Extract the 'properties' dictionary from the NWS JSON response
     props = obs_data.get("properties", {})
     
+    # Pull individual metrics, providing fallback values if missing
     timestamp = props.get("timestamp", "N/A")
     text_description = props.get("textDescription", "N/A")
     
@@ -46,11 +71,12 @@ def generate_status_text(obs_data: dict) -> str:
     humidity_val = props.get("relativeHumidity", {}).get("value")
     wind_speed_ms = props.get("windSpeed", {}).get("value")
     
-    # Unit conversions
+    # Perform unit conversions and rounding safely
     temp_f = c_to_f(temp_c) if temp_c is not None else 0.0
     wind_mph = (wind_speed_ms * 2.23694) if wind_speed_ms is not None else 0.0
     humidity = round(humidity_val, 1) if humidity_val is not None else "N/A"
 
+    # Format the metrics into a structured, human-readable text report
     status_text = (
         f"📍 DIRECT METAR STATION REPORT: {LOCATION_NAME}\n"
         f"--------------------------------------------------\n"
@@ -63,37 +89,51 @@ def generate_status_text(obs_data: dict) -> str:
     )
     return status_text
 
+
+# ==========================================
+# 5. NOTIFICATION DISPATCH (DISCORD WEBHOOK)
+# ==========================================
 def send_discord_webhook(status_text: str):
     """Dispatches the status report securely via Discord HTTPS Webhook."""
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
     
+    # Verify the webhook URL exists and looks valid before sending
     if not webhook_url or "api/webhooks" not in webhook_url:
         print("[*] Discord webhook URL missing or invalid in .env. Skipping remote dispatch.")
         return
 
-    # Wrap the status text in Discord code blocks for clean monospace formatting
+    # Format the payload using Markdown code blocks for clean monospace display in Discord
     payload = {
         "content": f"```text\n{status_text}\n```"
     }
 
     try:
         print(f"[*] Pushing telemetry via HTTPS Webhook...")
+        # Send HTTP POST request to Discord with the JSON payload
         response = requests.post(webhook_url, json=payload, timeout=10)
         response.raise_for_status()
         print("[*] Status report successfully dispatched to Discord channel!")
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] Failed to send Discord webhook: {e}", file=sys.stderr)
 
+
+# ==========================================
+# 6. MAIN EXECUTION FLOW
+# ==========================================
 if __name__ == "__main__":
+    # Step A: Fetch raw weather telemetry from NWS
     raw_data = fetch_exact_station_weather()
+    
+    # Step B: Parse and format the raw data into our status report
     formatted_text = generate_status_text(raw_data)
     
+    # Print the report to the local console/logs
     print("\n" + formatted_text + "\n")
     
-    # Save a local audit log
+    # Step C: Save a local audit log file for tracking
     with open("weather_status.log", "w", encoding="utf-8") as log_file:
         log_file.write(formatted_text)
     print("[*] Station report successfully written to 'weather_status.log'.")
     
-    # Dispatch alert to Discord
+    # Step D: Broadcast the formatted report to the Discord webhook
     send_discord_webhook(formatted_text)
