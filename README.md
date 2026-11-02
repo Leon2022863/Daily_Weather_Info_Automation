@@ -1,4 +1,4 @@
-﻿# Production-Grade Daily Weather Status & Discord Automation
+﻿# Daily Weather Status & Discord Webhook Automation
 
 Grabs(GET) Weather Information from an API endpoint and sends a webhook to a discord channel on a automated schedule (Daily @ 08:00).
 This is used to simulate a method of log or result automation in an enterprise environment, by grabbing data from an endpoint and sending it via a webhook.
