@@ -2,4 +2,7 @@
 venv/
 __pycache__/
 weather_status.log
-.vscode/
+.env
+__pycache__/
+*.log
+.venv/
