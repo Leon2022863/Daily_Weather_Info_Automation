@@ -14,7 +14,7 @@ spec:
           containers:
           - name: weather-automator
             image: weather-automator:latest
-            imagePullPolicy: Never  # Forces Kubernetes to use the locally loaded image in Minikube
+            imagePullPolicy: IfNotPresent  # Forces Kubernetes to use the locally loaded image in Minikube
             env:
             - name: DISCORD_WEBHOOK_URL
               valueFrom:
