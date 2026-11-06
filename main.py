@@ -16,8 +16,8 @@ LOCATION_NAME = os.getenv("LOCATION_NAME", "Winter Haven, FL (KGIF Station)")
 
 # NWS API requires a custom User-Agent identifying the application and contact email
 HEADERS = {
-    "User-Agent": "(weather-status-automator.local, platform-eng@example.com)",
-    "Accept": "application/json"
+    'User-Agent': 'K8sWeatherAutomator/1.0 (contact@yourdomain.com)',
+    'Accept': 'application/geo+json'
 }
 
 
